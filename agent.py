@@ -63,20 +63,21 @@ def get_model():
     # 1. OpenRouter (primary when OPENROUTER_API_KEY is configured)
     if openrouter_key:
         from strands.models.openai import OpenAIModel
-        model_id = os.getenv("OPENROUTER_MODEL", "anthropic/claude-3.5-haiku")
+        model_id = os.getenv("OPENROUTER_MODEL", "openai/gpt-4o-mini")
         return OpenAIModel(
             model_id=model_id,
             client_args={
                 "api_key": openrouter_key,
                 "base_url": "https://openrouter.ai/api/v1",
             },
+            stream=False,
         )
 
     # 2. Direct OpenAI
     if openai_key:
         from strands.models.openai import OpenAIModel
         model_id = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
-        return OpenAIModel(model_id=model_id, client_args={"api_key": openai_key})
+        return OpenAIModel(model_id=model_id, client_args={"api_key": openai_key}, stream=False)
 
     # 3. AWS Bedrock (Native Strands default)
     try:
