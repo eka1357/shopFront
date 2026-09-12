@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from strands import Agent
+from strands.handlers import null_callback_handler
 from tools import (
     search_faq,
     check_availability,
@@ -90,7 +91,7 @@ def get_model():
         return OpenAIModel(model_id="gpt-4o-mini")
 
 
-def create_bloom_agent() -> Agent:
+def create_bloom_agent(callback_handler=null_callback_handler) -> Agent:
     """Create and return a configured Strands Agent for Bloom Hair Studio."""
     model = get_model()
 
@@ -107,6 +108,7 @@ def create_bloom_agent() -> Agent:
         model=model,
         tools=tools,
         system_prompt=BLOOM_SYSTEM_PROMPT,
+        callback_handler=callback_handler,
     )
 
 

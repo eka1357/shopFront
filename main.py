@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from agent import create_bloom_agent
+from strands.handlers import null_callback_handler
 from tools.calendar_tool import _is_mock_mode
 
 
@@ -37,7 +38,8 @@ def run_chat_loop() -> None:
 
     print("Initializing Strands Agent...")
     try:
-        agent = create_bloom_agent()
+        # Disable default streaming callback handler to prevent duplicate printing in CLI demo
+        agent = create_bloom_agent(callback_handler=null_callback_handler)
         print("Concierge ready.\n")
     except Exception as e:
         print(f"Failed to initialize agent: {e}")
@@ -60,7 +62,7 @@ def run_chat_loop() -> None:
 
         if command == "reset":
             print("\nResetting concierge conversation state...")
-            agent = create_bloom_agent()
+            agent = create_bloom_agent(callback_handler=null_callback_handler)
             print("Conversation reset. How can Bloom Hair Studio help you today?\n")
             continue
 
