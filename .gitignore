@@ -1,1 +1,21 @@
+# Environment and secrets
 .env
+*.env
+
+# Python virtual environment and bytecode
+.venv/
+venv/
+ENV/
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Runtime and test artifacts
+escalations.json
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Operating system metadata
+.DS_Store
+Thumbs.db
