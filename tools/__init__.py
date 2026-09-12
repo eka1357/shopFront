@@ -6,6 +6,7 @@ from .calendar_tool import (
     reschedule_appointment,
     cancel_appointment,
 )
+from .escalate_tool import escalate_to_owner
 
 __all__ = [
     "search_faq",
@@ -13,4 +14,5 @@ __all__ = [
     "book_appointment",
     "reschedule_appointment",
     "cancel_appointment",
+    "escalate_to_owner",
 ]
