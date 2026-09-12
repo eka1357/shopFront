@@ -39,11 +39,18 @@ def escalate_to_owner(
         trigger_category: One of 'refund_request', 'service_complaint', 'scheduling_conflict', 'policy_exception', 'ambiguous_request'.
         reason: Clear, specific statement of why escalation was triggered.
         conversation_summary: Brief 1-2 sentence summary of what the customer stated.
-        urgency: Level of urgency ('normal', 'high', 'urgent'). Default is 'normal'.
+        urgency: Urgency classification ('high' vs 'normal'). MUST be 'high' if the customer expressed anger/frustration ("furious", "unacceptable", "outraged", "demand"), requested a refund or compensation, or has an escalating complaint. Use 'normal' only for calm requests without emotional distress or financial demands.
 
     Returns:
         Confirmation of escalation ticket creation with instructions for the customer.
     """
+    # Enforce HIGH urgency whenever refund demands or strong anger/frustration indicators are present
+    high_indicators = ["furious", "outraged", "unacceptable", "refund", "demand", "disaster", "terrible", "horrible", "angry", "compensation"]
+    combined_signals = f"{trigger_category} {reason} {conversation_summary}".lower()
+    if trigger_category == "refund_request" or any(w in combined_signals for w in high_indicators):
+        if urgency.lower() == "normal":
+            urgency = "high"
+
     timestamp = datetime.now().isoformat()
     ticket_id = f"ESC-{datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
 
@@ -55,7 +62,7 @@ def escalate_to_owner(
         "trigger_category": trigger_category,
         "reason": reason,
         "conversation_summary": conversation_summary,
-        "urgency": urgency,
+        "urgency": urgency.lower(),
         "status": "pending_owner_review",
     }
 
