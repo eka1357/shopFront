@@ -1,0 +1,13 @@
+# AWS Strands Agents SDK
+strands-agents>=1.55.1
+
+# OpenAI provider client (for OpenRouter & OpenAI model routing)
+openai>=3.13.0
+
+# Environment management
+python-dotenv>=1.2.3
+
+# Google Calendar API (Service Account & OAuth support)
+google-api-python-client>=2.160.0
+google-auth-httplib2>=0.2.0
+google-auth-oauthlib>=1.2.0
