@@ -45,6 +45,18 @@ def test_faq_tool():
 
 def test_calendar_tool():
     print("\n[TEST 2] Testing Calendar Scheduling Tool (In-Memory Mock)...")
+    from tools.calendar_tool import get_current_date
+    
+    # 0. Live system date tool check
+    date_info = get_current_date()
+    assert "CURRENT REAL SYSTEM CLOCK" in date_info
+    print("  [OK] get_current_date returns real system calendar accurately")
+
+    # Past date validation check
+    past_check = check_availability("2023-10-31")
+    assert "Validation Error" in past_check or "past" in past_check.lower()
+    print("  [OK] Past date hallucination successfully rejected by validation check")
+
     target_date = "2026-09-15"  # Tuesday
 
     # 1. Availability check

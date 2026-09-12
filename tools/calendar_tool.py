@@ -97,23 +97,134 @@ class MockCalendarStore:
                 "status": "confirmed",
             }
 
+def _validate_date_window(target_date: Any) -> str | None:
+    """Validate that the target date is not in the past or far in the future."""
+    from datetime import date as dt_date
+    if isinstance(target_date, datetime):
+        target_date = target_date.date()
+
+    now_date = datetime.now().date()
+
+    # Reject dates in the past
+    if target_date < now_date:
+        years_diff = (now_date - target_date).days / 365.25
+        if years_diff >= 1.0:
+            return (
+                f"Date Validation Error: '{target_date.strftime('%Y-%m-%d')}' is {years_diff:.1f} years in the past. "
+                f"Today's real date is {now_date.strftime('%Y-%m-%d (%A)')}. Please use a current or upcoming date."
+            )
+        return (
+            f"Date Validation Error: '{target_date.strftime('%Y-%m-%d')}' is in the past. "
+            f"Today's real date is {now_date.strftime('%Y-%m-%d (%A)')}. Please choose an upcoming date."
+        )
+
+    # Reject dates more than 1 year in the future
+    if target_date > now_date + timedelta(days=365):
+        years_future = (target_date - now_date).days / 365.25
+        return (
+            f"Date Validation Error: '{target_date.strftime('%Y-%m-%d')}' is {years_future:.1f} years in the future. "
+            f"Bloom Hair Studio accepts bookings up to 60 days in advance (through {(now_date + timedelta(days=60)).strftime('%Y-%m-%d')})."
+        )
+
+    return None
+
+
+@tool
+def get_current_date() -> str:
+    """Get the current real system date, day of week, and time.
+
+    Call this tool whenever you need to resolve relative dates (such as 'today', 'tomorrow',
+    'the day after tomorrow', 'this weekend', 'next week') or verify current calendar boundaries.
+
+    Returns:
+        The current system date, day of week, time, and computed dates for upcoming days.
+    """
+    now = datetime.now()
+    tomorrow = now + timedelta(days=1)
+    day_after = now + timedelta(days=2)
+    next_tue = now + timedelta(days=((1 - now.weekday()) % 7 or 7))
+    return (
+        f"CURRENT REAL SYSTEM CLOCK:\n"
+        f"- Today: {now.strftime('%Y-%m-%d (%A)')}\n"
+        f"- Current Time: {now.strftime('%I:%M %p')}\n"
+        f"- Tomorrow: {tomorrow.strftime('%Y-%m-%d (%A)')}\n"
+        f"- Day After Tomorrow: {day_after.strftime('%Y-%m-%d (%A)')}\n"
+        f"- Next Open Studio Day (Tue-Sat): {next_tue.strftime('%Y-%m-%d (%A)')}"
+    )
+
+
+class MockCalendarStore:
+    """Thread-safe in-memory calendar simulating salon schedule and Google Calendar events."""
+
+    def __init__(self):
+        # Format: {booking_id: {id, customer_name, customer_phone, service, start, end, notes, status}}
+        self.events: dict[str, dict[str, Any]] = {}
+        self._seed_initial_schedule()
+
+    def _seed_initial_schedule(self) -> None:
+        """Seed realistic existing appointments for testing conflicts and availability."""
+        base_date = datetime.now().date()
+        # Seed bookings for next Tuesday through Saturday
+        for day_offset in range(1, 8):
+            target_date = base_date + timedelta(days=day_offset)
+            # 0=Mon, 1=Tue, 2=Wed, 3=Thu, 4=Fri, 5=Sat, 6=Sun
+            if target_date.weekday() in (0, 6):
+                continue  # Closed Sunday & Monday
+
+            # Sample booked slot at 11:00 AM
+            start_dt = datetime.combine(target_date, time(11, 0))
+            end_dt = start_dt + timedelta(minutes=60)
+            slot_id = f"BLOOM-SEED-{target_date.strftime('%m%d')}-1100"
+            self.events[slot_id] = {
+                "id": slot_id,
+                "customer_name": "Jane Doe",
+                "customer_phone": "(512) 555-0144",
+                "service": "Signature Haircut & Blowdry",
+                "start": start_dt,
+                "end": end_dt,
+                "notes": "Returning client",
+                "status": "confirmed",
+            }
+
+            # Sample booked slot at 2:00 PM
+            start_dt2 = datetime.combine(target_date, time(14, 0))
+            end_dt2 = start_dt2 + timedelta(minutes=90)
+            slot_id2 = f"BLOOM-SEED-{target_date.strftime('%m%d')}-1400"
+            self.events[slot_id2] = {
+                "id": slot_id2,
+                "customer_name": "Mark Stevens",
+                "customer_phone": "(512) 555-0188",
+                "service": "Single Process Root Touch-Up",
+                "start": start_dt2,
+                "end": end_dt2,
+                "notes": "Color retouch",
+                "status": "confirmed",
+            }
+
     def check_availability(self, date_str: str) -> list[str]:
         """Return formatted available start times for the given date (YYYY-MM-DD)."""
-        try:
-            target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-        except ValueError:
-            # Try fuzzy or relative dates
-            now = datetime.now()
-            if "today" in date_str.lower():
-                target_date = now.date()
-            elif "tomorrow" in date_str.lower():
-                target_date = (now + timedelta(days=1)).date()
-            else:
-                return []
+        now = datetime.now()
+        cleaned = date_str.strip().lower()
+
+        if cleaned in ("today", "now"):
+            target_date = now.date()
+        elif "day after tomorrow" in cleaned:
+            target_date = (now + timedelta(days=2)).date()
+        elif "tomorrow" in cleaned:
+            target_date = (now + timedelta(days=1)).date()
+        else:
+            try:
+                target_date = datetime.strptime(date_str.strip(), "%Y-%m-%d").date()
+            except ValueError:
+                return [f"Error: Could not parse date '{date_str}'. Please provide YYYY-MM-DD (e.g., '{now.strftime('%Y-%m-%d')}')."]
+
+        val_error = _validate_date_window(target_date)
+        if val_error:
+            return [val_error]
 
         weekday = target_date.weekday()
         if weekday in (0, 6):
-            return ["CLOSED: Bloom Hair Studio is closed on Sundays and Mondays."]
+            return [f"CLOSED: Bloom Hair Studio is closed on Sundays and Mondays ({target_date.strftime('%A, %Y-%m-%d')}). Please choose Tuesday through Saturday."]
 
         # Tuesday - Friday: 9am - 6pm; Saturday: 9am - 5pm
         open_hour = 9
@@ -239,20 +350,42 @@ def check_availability(date: str) -> str:
     """Check available booking slots at Bloom Hair Studio for a specified date.
 
     Args:
-        date: The date to check in 'YYYY-MM-DD' format (e.g., '2026-09-15') or relative word ('today', 'tomorrow').
+        date: The date to check in 'YYYY-MM-DD' format (e.g., '2026-09-15') or relative word ('today', 'tomorrow', 'day after tomorrow').
 
     Returns:
-        List of open appointment time slots or a notification if the salon is closed.
+        List of open appointment time slots or a notification if the salon is closed or date is invalid.
     """
     mode_label = "[MOCK CALENDAR]" if _is_mock_mode() else "[GOOGLE CALENDAR]"
+
+    # Validate target date
+    now = datetime.now()
+    cleaned = date.strip().lower()
+    target_date = None
+    if cleaned in ("today", "now"):
+        target_date = now.date()
+    elif "day after tomorrow" in cleaned:
+        target_date = (now + timedelta(days=2)).date()
+    elif "tomorrow" in cleaned:
+        target_date = (now + timedelta(days=1)).date()
+    else:
+        try:
+            target_date = datetime.strptime(date.strip(), "%Y-%m-%d").date()
+        except ValueError:
+            pass
+
+    if target_date:
+        val_error = _validate_date_window(target_date)
+        if val_error:
+            return f"{mode_label} {val_error}"
 
     if _is_mock_mode():
         slots = _mock_calendar.check_availability(date)
         if not slots:
             return f"{mode_label} No available slots found for date '{date}'. Please verify the date format (YYYY-MM-DD) or choose another date."
-        if slots and "CLOSED" in slots[0]:
+        if slots and ("CLOSED" in slots[0] or "Validation Error" in slots[0] or "Error" in slots[0]):
             return f"{mode_label} {slots[0]}"
-        return f"{mode_label} Available appointment slots for {date}:\n" + "\n".join(f"- {s}" for s in slots)
+        resolved_label = target_date.strftime('%Y-%m-%d (%A)') if target_date else date
+        return f"{mode_label} Available appointment slots for {resolved_label}:\n" + "\n".join(f"- {s}" for s in slots)
 
     # Google Calendar live integration
     try:
@@ -310,7 +443,12 @@ def book_appointment(
     parsed_dt = _parse_datetime(start_time)
 
     if not parsed_dt:
-        return f"{mode_label} Error: Invalid start_time format '{start_time}'. Please provide format 'YYYY-MM-DD HH:MM' (e.g., '2026-09-15 10:00')."
+        return f"{mode_label} Error: Invalid start_time format '{start_time}'. Please provide format 'YYYY-MM-DD HH:MM' (e.g., '{datetime.now().strftime('%Y-%m-%d')} 10:00')."
+
+    # Validate against past or far future dates
+    val_error = _validate_date_window(parsed_dt.date())
+    if val_error:
+        return f"{mode_label} Booking rejected: {val_error}"
 
     # Verify business hours (Tue-Sat, 9am-6pm)
     if parsed_dt.weekday() in (0, 6):
@@ -392,6 +530,11 @@ def reschedule_appointment(booking_id: str, new_start_time: str) -> str:
 
     if not parsed_dt:
         return f"{mode_label} Error: Invalid date format '{new_start_time}'. Please use 'YYYY-MM-DD HH:MM'."
+
+    # Validate against past or far future dates
+    val_error = _validate_date_window(parsed_dt.date())
+    if val_error:
+        return f"{mode_label} Rescheduling rejected: {val_error}"
 
     if parsed_dt.weekday() in (0, 6):
         return f"{mode_label} Rescheduling failed: Bloom Hair Studio is closed Sundays and Mondays."

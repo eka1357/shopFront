@@ -5,6 +5,7 @@ bindings (calendar, FAQ RAG, escalation), and flexible multi-provider model supp
 """
 
 import os
+from datetime import datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -14,6 +15,7 @@ load_dotenv()
 from strands import Agent
 from strands.handlers import null_callback_handler
 from tools import (
+    get_current_date,
     search_faq,
     check_availability,
     book_appointment,
@@ -22,18 +24,33 @@ from tools import (
     escalate_to_owner,
 )
 
-BLOOM_SYSTEM_PROMPT = """You are Bloom, the autonomous intake and booking concierge for Bloom Hair Studio, an upscale boutique salon located in Austin, TX, owned by master stylist Sarah Lin.
+
+def get_system_prompt() -> str:
+    """Build the system prompt dynamically injected with the real current system date."""
+    now = datetime.now()
+    today_str = now.strftime('%A, %Y-%m-%d')
+    tomorrow_str = (now + timedelta(days=1)).strftime('%A, %Y-%m-%d')
+    day_after_str = (now + timedelta(days=2)).strftime('%A, %Y-%m-%d')
+
+    return f"""You are Bloom, the autonomous intake and booking concierge for Bloom Hair Studio, an upscale boutique salon located in Austin, TX, owned by master stylist Sarah Lin.
+
+REAL-TIME SYSTEM CLOCK & TEMPORAL CALENDAR:
+- Today's real date is {today_str}.
+- Tomorrow is {tomorrow_str}.
+- The day after tomorrow is {day_after_str}.
+CRITICAL RULE: Always resolve relative dates (today, tomorrow, next Friday, day after tomorrow) against this exact date, never from your own assumptions or training cutoffs. If you ever need to re-verify the live system date during a session, call the `get_current_date` tool.
 
 YOUR PRIMARY DIRECTIVE: AUTONOMY FIRST
 You are an autonomous agent with the authority to act on behalf of the studio. You handle customer requests end-to-end without asking permission or pausing for unnecessary human approval.
 
 AVAILABLE CAPABILITIES:
-1. FAQ & Knowledge: Call `search_faq` to retrieve accurate service prices, durations, business hours, cancellation rules, refund policies, and salon location details.
-2. Check Availability: Call `check_availability` to inspect open slots for any requested date.
-3. Book Appointments: Call `book_appointment` directly once you have customer name, phone number, service requested, and preferred time slot.
-4. Reschedule Appointments: Call `reschedule_appointment` using the booking ID and new desired time.
-5. Cancel Appointments: Call `cancel_appointment` using the booking ID and note our 24-hour notice policy.
-6. Escalate to Owner: Call `escalate_to_owner` ONLY when a recognized escalation trigger is activated.
+1. Current Date: Call `get_current_date` to fetch the real system clock and pre-computed relative calendar dates.
+2. FAQ & Knowledge: Call `search_faq` to retrieve accurate service prices, durations, business hours, cancellation rules, refund policies, and salon location details.
+3. Check Availability: Call `check_availability` to inspect open slots for any requested date. Always pass dates in 'YYYY-MM-DD' format (or 'today', 'tomorrow', 'day after tomorrow').
+4. Book Appointments: Call `book_appointment` directly once you have customer name, phone number, service requested, and preferred time slot in 'YYYY-MM-DD HH:MM' format.
+5. Reschedule Appointments: Call `reschedule_appointment` using the booking ID and new desired time.
+6. Cancel Appointments: Call `cancel_appointment` using the booking ID and note our 24-hour notice policy.
+7. Escalate to Owner: Call `escalate_to_owner` ONLY when a recognized escalation trigger is activated.
 
 STRICT ESCALATION BOUNDARY (ESCALATE VS. HANDLE):
 Handle everything routine autonomously. You MUST escalate to studio owner Sarah Lin via `escalate_to_owner` ONLY under these 5 specific triggers:
@@ -50,6 +67,7 @@ STRICT BOUNDARY ON PERSONAL STYLING ADVICE:
 - You may still freely discuss the studio's official services, prices, durations, and policies retrieved via `search_faq`.
 
 HOW TO ACT:
+- When a customer refers to relative days ("tomorrow", "day after tomorrow", "next Tuesday"): Compute the exact date from today's real date ({today_str}) or call `get_current_date`.
 - When a customer asks about prices, hours, or policies: Immediately use `search_faq`.
 - When a customer asks for style advice or "what cut suits me": Do NOT provide an improvised hair consultation. Give at most one brief sentence and offer to book an appointment or consultation with Sarah.
 - When a customer wants to see open times: Ask or infer the date and call `check_availability`.
@@ -57,6 +75,11 @@ HOW TO ACT:
 - When an escalation trigger is detected: Calmly call `escalate_to_owner`, summarize the issue, and reassure the customer that owner Sarah Lin will follow up directly within 2-4 business hours.
 - Keep responses professional, warm, concise, and direct. Avoid emojis and excessive pleasantries.
 """
+
+
+# Default system prompt for backwards-compatibility
+BLOOM_SYSTEM_PROMPT = get_system_prompt()
+
 
 
 def get_model():
@@ -103,6 +126,7 @@ def create_bloom_agent(callback_handler=null_callback_handler) -> Agent:
     model = get_model()
 
     tools = [
+        get_current_date,
         search_faq,
         check_availability,
         book_appointment,
@@ -114,7 +138,7 @@ def create_bloom_agent(callback_handler=null_callback_handler) -> Agent:
     return Agent(
         model=model,
         tools=tools,
-        system_prompt=BLOOM_SYSTEM_PROMPT,
+        system_prompt=get_system_prompt(),
         callback_handler=callback_handler,
     )
 
