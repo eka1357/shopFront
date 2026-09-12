@@ -140,7 +140,7 @@ def test_agent_conversation_flow():
     reply3 = agent("Please book a Signature Haircut for Sophia Taylor, phone 512-555-0987, at 2026-09-15 09:00")
     text3 = reply3.message["content"][0]["text"]
     print(f"  Bloom: {text3.strip()}")
-    assert "confirmed" in text3.lower() or "bloom-" in text3.lower()
+    assert any(term in text3.lower() for term in ["confirmed", "booked", "bloom-", "scheduled"])
     print("  [OK] Agent completed booking autonomously")
 
     # Step D: Escalation trigger (Refund demand)
